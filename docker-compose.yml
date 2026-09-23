@@ -1,0 +1,13 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: merchant_operations
+    ports:
+      - "5432:5432"
+    volumes:
+      - merchant_operations_pg:/var/lib/postgresql/data
+volumes:
+  merchant_operations_pg:

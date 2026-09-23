@@ -1,0 +1,165 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Fields and names required by @shopify/shopify-app-session-storage-prisma.
+model Session {
+  id                  String    @id
+  shop                String
+  state               String
+  isOnline            Boolean   @default(false)
+  scope               String?
+  expires             DateTime?
+  accessToken         String
+  userId              BigInt?
+  firstName           String?
+  lastName            String?
+  email               String?
+  accountOwner        Boolean   @default(false)
+  locale              String?
+  collaborator        Boolean?  @default(false)
+  emailVerified       Boolean?  @default(false)
+  refreshToken        String?
+  refreshTokenExpires DateTime?
+
+  @@index([shop])
+}
+
+model Shop {
+  domain                String            @id
+  installationStatus    InstallationStatus @default(INSTALLED)
+  grantedScopes         String            @default("")
+  installedAt           DateTime          @default(now())
+  uninstalledAt         DateTime?
+  lastSuccessfulSyncAt  DateTime?
+  products              ProductMirror[]
+  orders                OrderMirror[]
+  jobs                  SyncJob[]
+  deliveries            WebhookDelivery[]
+  settings              AppSetting?
+  audits                AuditLog[]
+}
+
+enum InstallationStatus {
+  INSTALLED
+  UNINSTALLED
+}
+
+model ProductMirror {
+  id               String   @id @default(cuid())
+  shopDomain       String
+  shopifyId        String
+  title            String
+  status           String
+  vendor           String?
+  tags             String[]
+  shopifyUpdatedAt DateTime
+  mirroredAt       DateTime @default(now())
+  shop             Shop     @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  @@unique([shopDomain, shopifyId])
+  @@index([shopDomain, title])
+}
+
+model OrderMirror {
+  id               String   @id @default(cuid())
+  shopDomain       String
+  shopifyId        String
+  name             String
+  displayFinancialStatus String
+  displayFulfillmentStatus String
+  totalAmount      Decimal  @db.Decimal(18, 2)
+  currencyCode     String
+  processedAt      DateTime
+  shopifyUpdatedAt DateTime
+  mirroredAt       DateTime @default(now())
+  shop             Shop     @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  @@unique([shopDomain, shopifyId])
+  @@index([shopDomain, processedAt])
+}
+
+model WebhookDelivery {
+  id          String        @id
+  shopDomain  String
+  topic       String
+  resourceId  String?
+  status      DeliveryStatus @default(PENDING)
+  receivedAt  DateTime      @default(now())
+  processedAt DateTime?
+  error       String?
+  shop        Shop          @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  @@index([shopDomain, receivedAt])
+}
+
+enum DeliveryStatus {
+  PENDING
+  PROCESSED
+  FAILED
+}
+
+model SyncJob {
+  id                    String    @id @default(cuid())
+  shopDomain            String
+  kind                  JobKind
+  status                JobStatus @default(QUEUED)
+  attempts              Int       @default(0)
+  nextRunAt             DateTime  @default(now())
+  resourceId            String?
+  webhookId             String?
+  shopifyBulkOperationId String?
+  createdAt             DateTime  @default(now())
+  startedAt             DateTime?
+  completedAt           DateTime?
+  failedAt              DateTime?
+  error                 String?
+  shop                  Shop      @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  @@index([status, nextRunAt])
+  @@index([shopDomain, createdAt])
+}
+
+enum JobKind {
+  BULK_PRODUCTS
+  BULK_ORDERS
+  WEBHOOK_PRODUCT
+  WEBHOOK_ORDER
+  WEBHOOK_PRODUCT_DELETE
+  WEBHOOK_UNINSTALL
+  WEBHOOK_SCOPES
+  WEBHOOK_CUSTOMER_DATA_REQUEST
+  WEBHOOK_CUSTOMER_REDACT
+  WEBHOOK_SHOP_REDACT
+}
+enum JobStatus {
+  QUEUED
+  RUNNING
+  WAITING
+  COMPLETED
+  FAILED
+}
+
+model AppSetting {
+  shopDomain   String   @id
+  syncEnabled  Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+  shop         Shop     @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  shopDomain  String
+  action      String
+  resourceId  String?
+  detail      Json?
+  createdAt   DateTime @default(now())
+  shop        Shop     @relation(fields: [shopDomain], references: [domain], onDelete: Cascade)
+
+  @@index([shopDomain, createdAt])
+}
